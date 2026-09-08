@@ -118,7 +118,7 @@ class VoiceConverter:
         if progress_callback:
             progress_callback("Synthesizing cloned vocals via RVC neural generator...")
 
-        chunk_size = 400
+        chunk_size = 1000
         converted_chunks = []
         
         with torch.no_grad():

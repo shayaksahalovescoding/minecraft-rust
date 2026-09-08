@@ -120,8 +120,13 @@ def train_rvc_model(
         ckpt_d = torch.load(str(BASE_D40K), map_location=DEVICE, weights_only=False)
         net_d.load_state_dict(ckpt_d["model"], strict=False)
 
-    opt_g = torch.optim.AdamW(net_g.parameters(), lr=lr, betas=(0.8, 0.99))
-    opt_d = torch.optim.AdamW(net_d.parameters(), lr=lr, betas=(0.8, 0.99))
+    if hasattr(net_g, "dec") and net_g.dec is not None:
+        for p in net_g.dec.parameters():
+            p.requires_grad = False
+
+    trainable_g = [p for p in net_g.parameters() if p.requires_grad]
+    opt_g = torch.optim.AdamW(trainable_g, lr=min(lr, 1e-4), betas=(0.8, 0.99))
+    opt_d = torch.optim.AdamW(net_d.parameters(), lr=min(lr, 1e-4), betas=(0.8, 0.99))
     scaler = torch.amp.GradScaler("cuda", enabled=True)
 
     start_time = time.time()
@@ -133,9 +138,7 @@ def train_rvc_model(
             break
 
         net_g.train()
-        net_d.train()
         epoch_g_loss = 0.0
-        epoch_d_loss = 0.0
         steps = 0
 
         for batch_idx, (phone_batch, pitch_batch, spec_batch, f0_batch) in enumerate(loader):
@@ -158,14 +161,15 @@ def train_rvc_model(
                     spec_lens,
                     sid,
                 )
-                loss_mel = F.l1_loss(spec_batch, spec_batch)
                 loss_kl = torch.sum(logs_q - logs_p - 0.5 + 0.5 * ((z - m_p) ** 2) * torch.exp(-2.0 * logs_p)) / (
                     torch.sum(y_mask) + 1e-4
                 )
-                loss_g = loss_mel * 45.0 + loss_kl
+                loss_g = torch.clamp(loss_kl, 0.0, 10.0)
 
             opt_g.zero_grad()
             scaler.scale(loss_g).backward()
+            scaler.unscale_(opt_g)
+            torch.nn.utils.clip_grad_norm_(trainable_g, 1.0)
             scaler.step(opt_g)
             scaler.update()
 
