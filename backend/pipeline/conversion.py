@@ -39,6 +39,8 @@ class VoiceConverter:
         if self.index_path and self.index_path.exists():
             try:
                 self.faiss_index = faiss.read_index(str(self.index_path))
+                if hasattr(self.faiss_index, "make_direct_map"):
+                    self.faiss_index.make_direct_map()
             except Exception:
                 self.faiss_index = None
 
@@ -90,7 +92,17 @@ class VoiceConverter:
                 for i in range(min_len):
                     weights = np.exp(-dists[i] / 10.0)
                     weights /= np.sum(weights) + 1e-8
-                    vecs = np.array([self.faiss_index.reconstruct(int(idx)) for idx in indices[i]])
+                    vec_list = []
+                    for idx in indices[i]:
+                        try:
+                            vec_list.append(self.faiss_index.reconstruct(int(idx)))
+                        except Exception:
+                            if hasattr(self.faiss_index, "make_direct_map"):
+                                self.faiss_index.make_direct_map()
+                                vec_list.append(self.faiss_index.reconstruct(int(idx)))
+                            else:
+                                vec_list.append(feats_f32[i])
+                    vecs = np.array(vec_list)
                     retrieved_feats[i] = np.sum(vecs * weights[:, np.newaxis], axis=0)
                 
                 feats = (1.0 - index_rate) * feats + index_rate * retrieved_feats

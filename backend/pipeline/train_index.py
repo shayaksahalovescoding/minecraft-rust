@@ -36,6 +36,7 @@ def build_faiss_index(features_dir, output_index_path, progress_callback=None):
         index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_L2)
         index.train(big_array)
         index.add(big_array)
+        index.make_direct_map()
     else:
         index = faiss.IndexFlatL2(dim)
         index.add(big_array)
