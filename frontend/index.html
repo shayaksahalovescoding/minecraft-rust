@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoiceClone — Personal AI Singing Voice Cloning Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5v14M7 5v14M2 9v6M22 9v6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="logo-title">VoiceClone</h1>
+          <span class="logo-subtitle">Personal AI Singing Voice Pipeline</span>
+        </div>
+      </div>
+      <div class="system-status" id="system-status">
+        <span class="status-indicator"></span>
+        <span class="status-text" id="gpu-badge">NVIDIA RTX 5070 • 12GB VRAM</span>
+        <span class="privacy-badge">100% On-Device</span>
+      </div>
+    </header>
+
+    <nav class="pipeline-tabs">
+      <button class="tab-btn active" data-tab="tab-dataset">
+        <span class="tab-number">1</span>
+        <span class="tab-label">Voice Studio</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-train">
+        <span class="tab-number">2</span>
+        <span class="tab-label">Model Training</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-stems">
+        <span class="tab-number">3</span>
+        <span class="tab-label">Song Stems</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-convert">
+        <span class="tab-number">4</span>
+        <span class="tab-label">Convert & Remix</span>
+      </button>
+    </nav>
+
+    <main class="content-area">
+      <section id="tab-dataset" class="tab-pane active">
+        <div class="pane-grid">
+          <div class="card glass">
+            <div class="card-header">
+              <h2>1. Upload Voice Recordings</h2>
+              <span class="badge">Raw Audio</span>
+            </div>
+            <p class="card-desc">
+              Upload 15–30+ minutes of clean singing or speech across your vocal range. Varied dynamics (soft, belting, falsetto, low notes) produce vastly better timbre fidelity than monotone recordings.
+            </p>
+            <div class="form-group">
+              <label for="dataset-name-input">Dataset Identifier</label>
+              <input type="text" id="dataset-name-input" class="input-control" value="my_voice" placeholder="e.g., my_voice">
+            </div>
+            <div class="drop-zone" id="dataset-drop-zone">
+              <div class="drop-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+              </div>
+              <p>Drag & drop audio files here, or <span class="accent-text">browse files</span></p>
+              <span class="file-hint">Supports WAV, MP3, FLAC, M4A, OGG</span>
+              <input type="file" id="dataset-file-input" multiple accept="audio/*" class="hidden-file-input">
+            </div>
+            <div id="dataset-file-list" class="file-chips"></div>
+            <button id="btn-upload-dataset" class="btn btn-primary btn-block">
+              Upload Voice Files
+            </button>
+          </div>
+
+          <div class="card glass">
+            <div class="card-header">
+              <h2>2. Audio Preprocessing & Quality Gate</h2>
+              <span class="badge badge-accent">Auto-Clean</span>
+            </div>
+            <p class="card-desc">
+              Denoises, filters sub-rumble (&lt;50Hz), trims silence, resamples to 40kHz, and rejects clipped or excessively noisy slices.
+            </p>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="min-duration-input">Min Slice Duration (s)</label>
+                <input type="number" id="min-duration-input" class="input-control" value="1.0" step="0.5" min="0.5" max="3.0">
+              </div>
+              <div class="form-group flex-1">
+                <label for="max-duration-input">Max Slice Duration (s)</label>
+                <input type="number" id="max-duration-input" class="input-control" value="4.0" step="0.5" min="2.0" max="8.0">
+              </div>
+            </div>
+            <button id="btn-preprocess-dataset" class="btn btn-secondary btn-block">
+              Run Preprocessing & Quality Verification
+            </button>
+
+            <div id="dataset-stats-card" class="stats-panel hidden">
+              <h3>Quality Audit Report</h3>
+              <div class="stats-grid">
+                <div class="stat-box">
+                  <span class="stat-value" id="stat-clean-duration">0m</span>
+                  <span class="stat-label">Clean Duration</span>
+                </div>
+                <div class="stat-box">
+                  <span class="stat-value" id="stat-clean-clips">0</span>
+                  <span class="stat-label">Valid Slices</span>
+                </div>
+                <div class="stat-box stat-warn">
+                  <span class="stat-value" id="stat-rejected-clipped">0</span>
+                  <span class="stat-label">Clipped Rejected</span>
+                </div>
+                <div class="stat-box stat-warn">
+                  <span class="stat-value" id="stat-rejected-noisy">0</span>
+                  <span class="stat-label">Noisy Rejected</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-train" class="tab-pane">
+        <div class="pane-grid">
+          <div class="card glass">
+            <div class="card-header">
+              <h2>RVC v2 Model Hyperparameters</h2>
+              <span class="badge">Fine-Tuning</span>
+            </div>
+            <p class="card-desc">
+              Fine-tune the RVC v2 neural generator and train a FAISS index on 768-dim ContentVec acoustic features.
+            </p>
+            <div class="form-group">
+              <label for="train-dataset-select">Select Prepared Dataset</label>
+              <select id="train-dataset-select" class="input-control"></select>
+            </div>
+            <div class="form-group">
+              <label for="train-model-name">Target Model Name</label>
+              <input type="text" id="train-model-name" class="input-control" value="my_singing_voice">
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="train-epochs">Total Epochs</label>
+                <input type="number" id="train-epochs" class="input-control" value="100" min="20" max="500">
+                <span class="hint">100 epochs is optimal for 15–30m voice datasets</span>
+              </div>
+              <div class="form-group flex-1">
+                <label for="train-batch-size">Batch Size</label>
+                <input type="number" id="train-batch-size" class="input-control" value="8" min="2" max="32">
+                <span class="hint">Batch size 8 fits comfortably in 12GB VRAM</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="train-lr">Learning Rate</label>
+              <input type="text" id="train-lr" class="input-control" value="0.0001">
+            </div>
+            <div class="btn-group">
+              <button id="btn-start-train" class="btn btn-primary flex-1">Start GPU Training</button>
+              <button id="btn-stop-train" class="btn btn-danger" disabled>Stop</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-header">
+              <h2>Trained Checkpoints & Indices</h2>
+              <span class="badge badge-accent">Model Registry</span>
+            </div>
+            <p class="card-desc">
+              Models available for singing voice conversion:
+            </p>
+            <div id="models-list" class="models-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-stems" class="tab-pane">
+        <div class="pane-grid">
+          <div class="card glass">
+            <div class="card-header">
+              <h2>Ingest Song to Clone</h2>
+              <span class="badge">Input Track</span>
+            </div>
+            <p class="card-desc">
+              Upload any song file or provide a URL (YouTube / audio link). Demucs will isolate the vocals and instrumental backing.
+            </p>
+            <div class="tabs-sub">
+              <button class="sub-tab-btn active" data-sub="sub-upload">File Upload</button>
+              <button class="sub-tab-btn" data-sub="sub-url">URL / YouTube</button>
+            </div>
+
+            <div id="sub-upload" class="sub-pane active">
+              <div class="drop-zone" id="song-drop-zone">
+                <div class="drop-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+                  </svg>
+                </div>
+                <p>Drop song file here or <span class="accent-text">browse</span></p>
+                <input type="file" id="song-file-input" accept="audio/*" class="hidden-file-input">
+              </div>
+              <div id="song-selected-name" class="selected-file-label"></div>
+              <button id="btn-upload-song" class="btn btn-primary btn-block">Ingest Song File</button>
+            </div>
+
+            <div id="sub-url" class="sub-pane">
+              <div class="form-group">
+                <label for="song-url-input">Song URL</label>
+                <input type="text" id="song-url-input" class="input-control" placeholder="https://www.youtube.com/watch?v=...">
+              </div>
+              <button id="btn-download-url" class="btn btn-primary btn-block">Download Song via yt-dlp</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-header">
+              <h2>Demucs Stem Splitter</h2>
+              <span class="badge badge-accent">HTDemucs</span>
+            </div>
+            <p class="card-desc">
+              Extracts high-resolution isolated vocal and backing instrumental stems with GPU acceleration.
+            </p>
+            <div class="form-group">
+              <label>Current Active Song ID</label>
+              <input type="text" id="active-song-id" class="input-control" readonly placeholder="No song loaded yet">
+            </div>
+            <button id="btn-run-separation" class="btn btn-secondary btn-block">
+              Split into Vocals & Instrumental
+            </button>
+
+            <div id="stems-preview" class="stems-panel hidden">
+              <h3>Separated Stems</h3>
+              <div class="audio-player-card">
+                <span class="player-title">Isolated Vocal Stem</span>
+                <audio id="audio-vocal-stem" controls class="custom-audio"></audio>
+              </div>
+              <div class="audio-player-card">
+                <span class="player-title">Instrumental Backing Track</span>
+                <audio id="audio-inst-stem" controls class="custom-audio"></audio>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-convert" class="tab-pane">
+        <div class="pane-grid">
+          <div class="card glass">
+            <div class="card-header">
+              <h2>Voice Conversion Controls</h2>
+              <span class="badge">RVC v2 Inference</span>
+            </div>
+            <p class="card-desc">
+              Convert the extracted vocal track to your personal singing voice.
+            </p>
+            <div class="form-group">
+              <label for="convert-model-select">Singing Voice Model</label>
+              <select id="convert-model-select" class="input-control"></select>
+            </div>
+
+            <div class="control-box">
+              <div class="control-header">
+                <label for="pitch-shift-range">Pitch Shift (Semitones)</label>
+                <span id="pitch-val" class="control-value">0</span>
+              </div>
+              <input type="range" id="pitch-shift-range" min="-24" max="24" step="1" value="0" class="slider">
+              <div class="quick-pitch-buttons">
+                <button class="btn-chip" data-pitch="-12">Female &rarr; Male (-12)</button>
+                <button class="btn-chip" data-pitch="0">Original (0)</button>
+                <button class="btn-chip" data-pitch="12">Male &rarr; Female (+12)</button>
+              </div>
+            </div>
+
+            <div class="control-box">
+              <div class="control-header">
+                <label for="index-rate-range">FAISS Index Ratio (Timbre Match)</label>
+                <span id="index-val" class="control-value">0.75</span>
+              </div>
+              <input type="range" id="index-rate-range" min="0.0" max="1.0" step="0.05" value="0.75" class="slider">
+              <span class="hint">0.75 locks your personal vocal tone; lower values reduce artifact sensitivity</span>
+            </div>
+
+            <div class="control-box">
+              <div class="control-header">
+                <label for="protect-range">Voiceless Consonant & Breath Protect</label>
+                <span id="protect-val" class="control-value">0.33</span>
+              </div>
+              <input type="range" id="protect-range" min="0.0" max="0.5" step="0.01" value="0.33" class="slider">
+              <span class="hint">Protects breath, sibilants (s/t/k), and unvoiced acoustics from vocoder distortion</span>
+            </div>
+
+            <div class="control-box">
+              <div class="control-header">
+                <label for="vocal-gain-range">Vocal Balance Gain</label>
+                <span id="gain-val" class="control-value">0.0 dB</span>
+              </div>
+              <input type="range" id="vocal-gain-range" min="-12.0" max="12.0" step="0.5" value="0.0" class="slider">
+            </div>
+
+            <button id="btn-convert-remix" class="btn btn-primary btn-block">
+              Convert Vocal & Master Remix
+            </button>
+          </div>
+
+          <div class="card glass">
+            <div class="card-header">
+              <h2>Audition & Master Export</h2>
+              <span class="badge badge-accent">Final Output</span>
+            </div>
+            <p class="card-desc">
+              Realignment compensates for frame drift. Level matching and high-pass filtering sit your vocals directly into the backing track.
+            </p>
+
+            <div class="result-box">
+              <div class="result-player">
+                <div class="player-header">
+                  <span class="player-title">Cloned Vocal (Solo)</span>
+                  <span class="tag-pill">User Timbre</span>
+                </div>
+                <audio id="audio-converted-solo" controls class="custom-audio"></audio>
+              </div>
+
+              <div class="result-player highlight-player">
+                <div class="player-header">
+                  <span class="player-title">Final Master Mix (Vocals + Instrumental)</span>
+                  <span class="tag-pill tag-master">Mastered</span>
+                </div>
+                <audio id="audio-final-mix" controls class="custom-audio"></audio>
+              </div>
+
+              <div class="download-actions">
+                <a id="btn-download-wav" class="btn btn-secondary flex-1" download>Download WAV (Lossless)</a>
+                <a id="btn-download-mp3" class="btn btn-primary flex-1" download>Download MP3 (320kbps)</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="console-drawer">
+      <div class="console-header" id="console-toggle">
+        <div class="console-status">
+          <span class="pulse-dot"></span>
+          <span class="console-title">Live Pipeline Activity Log</span>
+        </div>
+        <button class="btn-icon" id="btn-clear-logs" title="Clear logs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="console-body" id="console-logs"></div>
+    </footer>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>
