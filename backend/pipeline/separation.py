@@ -22,10 +22,11 @@ def separate_stems(
     if progress_callback:
         progress_callback(f"Starting Demucs ({model_name}) separation on {audio_file.name} using {device}...")
 
+    runner_script = Path(__file__).resolve().parent / "demucs_runner.py"
     cmd = [
         sys.executable,
-        "-m",
-        "demucs.separate",
+        "-u",
+        str(runner_script),
         "-n",
         model_name,
         "--two-stems",
