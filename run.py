@@ -2,6 +2,30 @@ import sys
 import os
 import torch
 import uvicorn
+
+if sys.platform == "win32":
+    import asyncio.proactor_events
+    import socket
+    def _safe_call_connection_lost(self, exc):
+        if self._called_connection_lost:
+            return
+        try:
+            self._protocol.connection_lost(exc)
+        finally:
+            if hasattr(self._sock, "shutdown") and self._sock.fileno() != -1:
+                try:
+                    self._sock.shutdown(socket.SHUT_RDWR)
+                except (ConnectionResetError, OSError):
+                    pass
+            self._sock.close()
+            self._sock = None
+            server = self._server
+            if server is not None:
+                server._detach()
+                self._server = None
+            self._called_connection_lost = True
+    asyncio.proactor_events._ProactorBasePipeTransport._call_connection_lost = _safe_call_connection_lost
+
 from backend.config import BASE_DIR, PRETRAINED_DIR, RMVPE_PATH, BASE_G40K, BASE_D40K, DEVICE, DEVICE_NAME, VRAM_GB
 
 def check_environment():
