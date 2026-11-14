@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mc-core",
+    "crates/mc-nbt",
+    "crates/mc-data",
+    "crates/mc-world",
+    "crates/mc-gen",
+    "crates/mc-entities",
+    "crates/mc-proto",
+    "crates/mc-audio",
+    "crates/mc-render",
+    "crates/mc-client",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+glam = { version = "0.34", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+flate2 = "1.1"
+zip = "2.2"
+image = "0.25"
+rayon = "1.10"
+bytemuck = { version = "1.21", features = ["derive"] }
+crossbeam-channel = "0.5"
+pollster = "0.4"
+wgpu = { version = "24.0", default-features = false, features = ["wgsl", "vulkan-portability", "angle"] }
+winit = "0.30"
+rodio = "0.20"
+rand = "0.8"

@@ -1,0 +1,9 @@
+[package]
+name = "mc-nbt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mc-core = { path = "../mc-core" }
+flate2.workspace = true
+serde.workspace = true

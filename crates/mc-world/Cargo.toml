@@ -1,0 +1,13 @@
+[package]
+name = "mc-world"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mc-core = { path = "../mc-core" }
+mc-data = { path = "../mc-data" }
+mc-nbt = { path = "../mc-nbt" }
+glam.workspace = true
+rayon.workspace = true
+rand.workspace = true
+serde.workspace = true

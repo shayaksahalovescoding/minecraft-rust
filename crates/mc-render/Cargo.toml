@@ -1,0 +1,19 @@
+[package]
+name = "mc-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mc-core = { path = "../mc-core" }
+mc-data = { path = "../mc-data" }
+mc-world = { path = "../mc-world" }
+mc-entities = { path = "../mc-entities" }
+glam = { workspace = true }
+wgpu = { workspace = true }
+winit = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }
+zip = { workspace = true }
+image = { workspace = true }
+rayon = { workspace = true }

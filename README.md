@@ -1,341 +1,153 @@
-# VoiceClone — Personal AI Singing Voice Cloning Pipeline
+# Minecraft 26.1.2 — Clean-Room Rust Edition
 
-VoiceClone is a local, GPU-accelerated singing voice cloning studio. It trains a custom voice conversion model on samples of your own voice, takes any uploaded song or YouTube link, re-sings the vocals with your trained voice while preserving melody, rhythm, phrasing, and dynamics, and automatically remixes the output with the original instrumental track.
-
-The entire pipeline runs 100% on-device on your local machine. No voice recordings or processed songs ever leave your system.
+A complete, from-scratch clean-room implementation of **Minecraft Java Edition 26.1.2** (`Protocol 775`, `DataVersion 4790`) written in Rust. Built around data, formulas, and constants reverse-engineered from a local Minecraft Java 26.1.2 installation, paired with a native `wgpu` 3D renderer, `winit` desktop client, `rodio` audio engine, multi-threaded world generation/meshing, and Anvil `.mca` persistence.
 
 ---
 
-## Key Features
+## Quick Start
 
-- **Private & Local-First**: Operates strictly offline. Zero cloud API calls, zero telemetry, and zero third-party data transmission.
-- **High-Fidelity Neural Conversion**: Powered by RVC v2 (Retrieval-based Voice Conversion) with HiFi-GAN NSF vocoding at 40kHz.
-- **Robust Pitch & Timbre Extraction**: Employs RMVPE (Robust Model for Vocal Pitch Estimation) and 768-dimensional ContentVec HuBERT acoustic embeddings.
-- **FAISS Timbre Retrieval**: Combines neural generator weights with FAISS L2/IVF nearest-neighbor vector indexing to reproduce your personal vocal tone.
-- **Demucs Stem Separation**: Isolates pristine vocal and backing instrumental stems from any song using Meta's `htdemucs` architecture.
-- **Automated Stem Remixing**: Aligns converted vocals to the instrumental backing using envelope cross-correlation latency compensation, sub-80Hz high-pass filtering, and RMS energy matching.
-- **Glassmorphic Web Studio**: Intuitive browser interface with real-time SSE log streaming, responsive sliders, quick-transposition presets, and audio audition players.
-- **Lossless & Master Export**: Instant one-click exports to lossless 40kHz WAV and 320kbps high-bitrate MP3.
+### Prerequisites
+- **Rust toolchain** supporting **Edition 2024** (verified with `rustc 1.99.1` / `cargo 1.99.1` on `x86_64-pc-windows-msvc`)
+- **Optional (for official vanilla textures & sounds):** An existing Minecraft Java `26.1.2` / `Fabric 26.1.2` installation in `%APPDATA%\.minecraft` (or `$HOME/.minecraft`). If absent, the renderer and audio engine automatically use built-in procedural 16x16 pixel-art tiles and synthesized sound fallbacks.
 
----
-
-## Architecture Overview
-
-```
-                      [ Raw Voice Samples ]
-                                |
-                   [ Stage 1: Quality Gate ]
-           (Silence Trim, <50Hz Cut, SNR/Clip Audit)
-                                |
-               [ Stage 2: Feature & Index Training ]
-        (ContentVec 768-dim Embeddings + RMVPE Pitch Grid)
-                                |
-               +----------------+----------------+
-               |                                 |
-     [ RVC v2 Generator ]               [ FAISS Vector Index ]
-      (models_trained/)                   (models_trained/)
-               |                                 |
-               +----------------+----------------+
-                                |
-[ Song Audio / YouTube ]        |
-           |                    |
-  [ Stage 3: Demucs ]           |
-  (htdemucs Stem Split)         |
-     /           \              |
-[Inst Stem]   [Vocal Stem]      |
-     |             \            |
-     |       [ Stage 4: Voice Conversion ]
-     |       (Pitch Shift, Timbre Retrieval, Protect)
-     |                     |
-     |             [ Cloned Vocal ]
-     \                     /
-      \                   /
-    [ Stage 5: Remix & Latency Alignment ]
-   (Cross-Correlation, 80Hz HPF, RMS Level Match)
-                     |
-        [ Master Output: WAV / MP3 ]
-```
-
----
-
-## Prerequisites & Requirements
-
-### Hardware Requirements
-
-| Component | Minimum Specification | Recommended Specification |
-| :--- | :--- | :--- |
-| **GPU** | NVIDIA GPU with 6 GB VRAM | NVIDIA GeForce RTX 3060 / 4070 / 5070 (8–12+ GB VRAM) |
-| **CUDA** | CUDA 12.1+ | CUDA 12.4 or 12.8 |
-| **System RAM** | 16 GB | 32 GB |
-| **Storage** | 10 GB free space | SSD with 25+ GB free space |
-
-### Software Requirements
-
-- **Operating System**: Windows 10/11 (64-bit), Linux (Ubuntu 20.04+), or macOS
-- **Python**: Version 3.10, 3.11, or 3.12 (Python 3.12 tested and verified)
-- **FFmpeg**: Required for audio format transcoding, `yt-dlp` stream extraction, and Demucs processing
-
-#### Installing FFmpeg
-
-**Windows (PowerShell as Administrator or User):**
+### Build & Play
 ```powershell
-winget install Gyan.FFmpeg
+# Run the game in release mode
+cargo run --release -p mc-client
+
+# Or build the optimized standalone executable and launch it directly
+cargo build --release -p mc-client
+.\target\release\mc-client.exe
 ```
-Alternatively via Scoop:
+
+### Run Test Suite
 ```powershell
-scoop install ffmpeg
+cargo test --workspace
 ```
-Alternatively via Chocolatey:
+
+---
+
+## Workspace Architecture
+
+```
+.
+├── Cargo.toml                  # 10-crate Rust 2024 workspace
+├── tools/
+│   └── extract_26_1_2.py       # Extracts registries, recipes, loot, tags & asset maps from Fabric 26.1.2.jar
+├── data/
+│   └── extracted_26_1_2/       # Embedded JSON data tables (blocks, items, recipes, biomes, advancements, etc.)
+├── docs/
+│   └── superpowers/specs/      # Architecture & reverse-engineering specification
+├── saves/                      # Runtime Anvil world save directory (created when saving worlds)
+└── crates/
+    ├── mc-core/                # BlockPos, ChunkPos, DimensionId, Direction, GameMode, Difficulty, AABB, RNG, SharedConstants
+    ├── mc-nbt/                 # Binary NBT codec + Anvil .mca RegionFile reader/writer (4 KiB sectors + .mcc overflow)
+    ├── mc-data/                # Embedded 26.1.2 registries, tags, recipes, loot tables, biomes, enchantments & advancements
+    ├── mc-world/               # World state, 16x16x384 chunks, nibble sky/block light BFS, fluids, redstone, block entities, explosions
+    ├── mc-gen/                 # Deterministic Overworld, Nether & End terrain, cave, ore, tree & structure generators
+    ├── mc-entities/            # Player physics, FoodData, CombatRules, mob/boss AI, projectiles, drops, particles & /commands
+    ├── mc-proto/               # Protocol 775 VarInt + zlib packet framing, Server List Ping & LAN multiplayer server
+    ├── mc-audio/               # Asset index 30.json OGG loader + rodio playback with procedural fallback synthesizer
+    ├── mc-render/              # Texture atlas (JAR + fallback), parallel chunk mesher, 8x8 bitmap font & wgpu 3D/2D pipelines
+    └── mc-client/              # Desktop game binary, winit event loop, 20 TPS fixed loop, Anvil save/load & full UI screens
+```
+
+---
+
+## Features
+
+### World, Dimensions & Simulation (20 TPS)
+- **Three Dimensions:** Overworld (`y = -64..319`, skylight, day/night cycle, clouds), The Nether (`y = 0..255`, ceiling, fast lava, water evaporation, bed explosions, `8:1` portal coordinate scaling), and The End (`y = 0..255`, End Stone islands, Ender Dragon fight).
+- **Lighting & Physics:** Nibble-packed sky & block light BFS propagation, swept `AABB` player & entity collision, gravity blocks (`sand`, `red_sand`, `gravel`, `anvil`), water/lava flow ticks, crop growth, fire spread, and explosion raycasting.
+- **Redstone & Mechanisms:** Redstone dust signal strength (`0..15`), levers, buttons, repeaters, comparators, redstone torches, redstone lamps, observers, doors, trapdoors, TNT ignition, dispensers, and pistons.
+- **Block Entities:** Chests, barrels, shulker boxes, furnaces, blast furnaces, smokers, brewing stands, hoppers, dispensers, enchanting tables, and anvils.
+
+### Rendering & Audio
+- **Texture Atlas (`mc-render`):** Automatically loads PNG textures from `assets/minecraft/textures/` inside `Fabric 26.1.2.jar` into an extruded-border 16x16 GPU atlas (plus `destroy_stage_0..9` crack overlays) with procedural fallbacks if no JAR is found.
+- **Multi-Pass Chunk Mesher:** `rayon`-parallel meshing across `opaque`, `cutout`, and `translucent` passes with cross-chunk face culling, 4-corner smooth voxel ambient occlusion, biome grass/foliage/water tinting, and custom shapes (`Slab`, `Stair`, `Fence`, `Wall`, `Pane`, `Torch`, `Cross`, `Door`, `Trapdoor`, `Carpet`, `SnowLayer`, `Bed`, `Chest`, `Fluid`, `Wire`, `Repeater`, `Cactus`, `Farmland`, `Portal`).
+- **Atmosphere & Models:** Dynamic day/night sky color, sun, moon, night stars, drifting clouds, dimension/fluid distance fog, first-person hand/held-item rendering, third-person player model (`F5`), entity silhouettes, and particle effects.
+- **Audio (`mc-audio`):** Reads `.minecraft/assets/indexes/30.json` to play real OGG game sounds via `rodio`, falling back seamlessly to procedural waveform synthesis.
+
+### Progression, UI & Persistence
+- **Full Menu Suite:** Title Screen (Singleplayer world list, Create New World with seed & mode, Multiplayer Server Ping/Connect, Options), Pause Menu (with Open to LAN), Death Screen, Survival Inventory (`2x2` crafting + armor + offhand), Searchable Creative Catalog (`1,485` items), Crafting Table (`3x3`), Furnace/Blast Furnace/Smoker, Chest/Barrel, Enchanting Table, Anvil, Brewing Stand, Villager Trading, and Advancements (`1,617` tracked advancements + unlock toasts).
+- **Anvil Save Format:** Saves GZip-compressed `level.dat` (`DataVersion = 4790`), per-dimension region files (`region/r.*.mca`, `DIM-1/region/r.*.mca`, `DIM1/region/r.*.mca`), and per-dimension entity JSON under `saves/<world_name>/`.
+
+---
+
+## Controls & Commands
+
+### Controls
+| Input | Action |
+| :--- | :--- |
+| `W` `A` `S` `D` | Move / Strafe |
+| `Mouse` | Look around |
+| `Space` | Jump / Swim up (`Double-tap` in Creative to toggle Fly) |
+| `Shift` | Sneak / Descend while flying |
+| `Ctrl` | Sprint |
+| `Left Click` | Attack entity / Hold to break targeted block |
+| `Right Click` | Place block / Eat food / Equip armor / Open container / Trade / Ignite / Shoot |
+| `1–9` / `Mouse Wheel` | Select hotbar slot |
+| `Q` | Drop held item |
+| `E` | Open Inventory (Survival) or Searchable Item Catalog (Creative) |
+| `T` / `/` | Open Chat / Command bar |
+| `L` | View Advancements |
+| `F3` | Toggle Debug HUD (FPS, XYZ, Block, Chunk, Biome, Dimension, Light) |
+| `F5` | Toggle First-Person / Third-Person Camera |
+| `Esc` | Close menu / Pause / Save & Quit |
+
+### Supported Slash Commands
+Use `T` or `/` in-game to run commands implemented in `mc-entities`:
+- `/help`
+- `/gamemode <survival|creative|adventure|spectator>`
+- `/difficulty <peaceful|easy|normal|hard>`
+- `/give <target> <item> [count]`
+- `/tp <x> <y> <z>`
+- `/setblock <x> <y> <z> <block>`
+- `/fill <x1> <y1> <z1> <x2> <y2> <z2> <block>`
+- `/summon <entity> [x y z]`
+- `/time <set <day|noon|night|midnight|ticks>|add <ticks>>`
+- `/weather <clear|rain|thunder>`
+- `/effect <target> <effect> [seconds] [amplifier]`
+- `/enchant <target> <enchantment> [level]`
+- `/xp <amount>`
+- `/gamerule <rule> [value]`
+- `/spawnpoint [x y z]`
+- `/clear`, `/kill`, `/seed`, `/say`
+
+---
+
+## Extracted 26.1.2 Dataset & Protocol Constants
+
+All data in `data/extracted_26_1_2/` is extracted from Minecraft Java `26.1.2` (`WORLD_VERSION = 4790`, `PROTOCOL_VERSION = 775`):
+
+| Category | Count | File |
+| :--- | :---: | :--- |
+| Blocks | 1,147 | `registries.json` |
+| Items | 1,485 | `registries.json` |
+| Entities / Effects / Particles | 159 / 40 / 119 | `registries.json` |
+| Biomes / Enchantments / Damage Types | 65 / 43 / 50 | `biomes.json`, `enchantments.json`, `damage_types.json` |
+| Dimension Types | 4 | `dimension_types.json` |
+| Recipes / Loot Tables / Tags | 1,515 / 1,326 / 758 | `recipes.json`, `loot_tables.json`, `tags.json` |
+| Villager Trades / Advancements | 387 / 1,617 | `villager_trades.json`, `advancements.json` |
+| Resolved Block / Item Textures | 1,170 / 1,267 | `block_textures.json`, `item_textures.json` |
+
+To re-run extraction against your local `.minecraft` installation:
 ```powershell
-choco install ffmpeg
-```
-
-**Ubuntu / Debian:**
-```bash
-sudo apt update && sudo apt install -y ffmpeg
-```
-
-**macOS (Homebrew):**
-```bash
-brew install ffmpeg
-```
-
-Verify your installation:
-```bash
-ffmpeg -version
+python tools/extract_26_1_2.py
 ```
 
 ---
 
-## Installation Guide
+## Verification
 
-### 1. Clone or Open the Repository
-
-Open your terminal or PowerShell and navigate to the project root:
-```bash
-cd VoiceClone
-```
-
-### 2. Set Up a Virtual Environment
-
-**Windows (PowerShell):**
-```powershell
-python -m venv venv
-.\venv\Scripts\activate
-```
-
-**Linux / macOS:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Install PyTorch with CUDA Support
-
-Install the appropriate PyTorch build matching your NVIDIA CUDA driver.
-
-**For CUDA 12.8 / 12.4 (Modern RTX 30/40/50 Series):**
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-```
-
-**For CUDA 12.1:**
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-**For CPU-Only (Testing / Fallback):**
-```bash
-pip install torch torchvision torchaudio
-```
-
-### 4. Install Project Dependencies
-
-Install all remaining audio processing, machine learning, and web framework dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Download Pretrained Foundation Models
-
-Download the required base models (`rmvpe.pt`, `f0G40k.pth`, and `f0D40k.pth`):
-```bash
-python scripts/download_models.py
-```
-
-This populates the `pretrained/` directory:
-- `pretrained/rmvpe.pt`: Pitch extraction neural model
-- `pretrained/f0G40k.pth`: Pretrained RVC v2 40kHz HiFi-GAN generator
-- `pretrained/f0D40k.pth`: Pretrained RVC v2 40kHz multi-period discriminator
-
----
-
-## Quickstart
-
-Start the application launcher:
-```bash
-python run.py
-```
-
-Once the server initializes, open your web browser and navigate to:
-```
-http://127.0.0.1:8000
-```
-
----
-
-## Step-by-Step User Manual
-
-The studio interface is divided into 4 sequential workflow tabs.
-
-### Tab 1: Voice Studio (Dataset Preparation)
-
-1. **Record Voice Samples**:
-   - Provide 15 to 30 minutes of clean, isolated recordings of your own voice.
-   - Sing across your comfortable pitch range with varied dynamics (soft vocals, head voice, chest resonance, falsetto).
-   - Accepted file types: `.wav`, `.mp3`, `.flac`, `.m4a`, `.ogg`.
-2. **Upload Recordings**:
-   - Enter a dataset identifier (for example, `my_voice`).
-   - Drag and drop your audio files into the drop zone and click **Upload Voice Files**.
-3. **Run Preprocessing & Quality Verification**:
-   - Set slice duration boundaries (default: 1.0s minimum, 4.0s maximum).
-   - Click **Run Preprocessing & Quality Verification**.
-   - The quality gate automatically trims silence, cuts sub-50Hz microphone rumble, resamples audio to 40kHz, and audits audio for clipping and noise rejection.
-
-### Tab 2: Model Training (Fine-Tuning & FAISS Indexing)
-
-1. **Select Prepared Dataset**:
-   - Choose your preprocessed dataset from the dropdown.
-2. **Configure Training Parameters**:
-   - **Target Model Name**: Unique name for your model checkpoint (e.g., `my_singing_voice`).
-   - **Total Epochs**: Set to 100 (standard for 15–30 minute voice datasets).
-   - **Batch Size**: Set to 8 (for 12GB VRAM) or 4 (for 6–8GB VRAM).
-   - **Learning Rate**: Default is `0.0001`.
-3. **Train Model**:
-   - Click **Start GPU Training**.
-   - The engine extracts 768-dimensional ContentVec representations and RMVPE pitch grids, trains a FAISS vector index, and fine-tunes the generator.
-   - Checkpoints and index files are saved in `models_trained/<model_name>/`.
-
-### Tab 3: Song Stems (Ingestion & Separation)
-
-1. **Ingest Song**:
-   - **Direct File Upload**: Upload any full song audio file (`.wav`, `.mp3`, `.flac`, `.m4a`).
-   - **URL / YouTube**: Paste any song URL (YouTube, SoundCloud, or direct audio link) and click **Download Song via yt-dlp**.
-2. **Split Stems with Demucs**:
-   - Click **Split into Vocals & Instrumental**.
-   - Meta's `htdemucs` isolates the original vocal track and instrumental backing track.
-   - Audition both stems directly in the built-in media players.
-
-### Tab 4: Convert & Remix
-
-1. **Select Voice Model**:
-   - Choose your trained voice model from the dropdown.
-2. **Tune Conversion Controls**:
-   - **Pitch Shift (Semitones)**: Adjust from -24 to +24 semitones.
-     - `0`: Same vocal range.
-     - `-12`: Transpose female original to male singing voice.
-     - `+12`: Transpose male original to female singing voice.
-   - **FAISS Index Ratio**: Slider from `0.0` to `1.0` (recommended: `0.75`). Controls the blend ratio between retrieved timbre vectors and raw acoustic embeddings.
-   - **Voiceless Consonant & Breath Protect**: Slider from `0.0` to `0.5` (recommended: `0.33`). Protects unvoiced consonants, sibilants (`s`, `t`, `k`), and breathing sounds from vocoder distortion.
-   - **Vocal Balance Gain**: Adjust vocal volume (-12 dB to +12 dB) to sit the converted vocals cleanly into the track.
-3. **Convert & Master Remix**:
-   - Click **Convert Vocal & Master Remix**.
-   - The engine runs inference, aligns latency via cross-correlation, applies an 80Hz high-pass filter, balances RMS energy levels, and renders the master mix.
-4. **Audition & Export**:
-   - Preview the **Cloned Vocal (Solo)** or the **Final Master Mix**.
-   - Click **Download WAV (Lossless)** for production mixing, or **Download MP3 (320kbps)** for sharing.
-
----
-
-## Directory Structure
-
-```
-VoiceClone/
-├── backend/
-│   ├── app.py                     - FastAPI REST API & SSE event streaming
-│   ├── config.py                  - Global configurations, paths & device detection
-│   ├── models/
-│   │   ├── hubert/                - ContentVec 768-dim acoustic feature extractor
-│   │   ├── rmvpe/                 - RMVPE DeepUnet pitch estimation model
-│   │   └── rvc/                   - RVC v2 SynthesizerTrn & MultiPeriodDiscriminator
-│   └── pipeline/
-│       ├── dataset_prep.py        - Denoising, rumble filter, silence trimming, SNR audit
-│       ├── feature_extract.py     - ContentVec & RMVPE batch extraction
-│       ├── train_index.py         - FAISS vector index builder (IndexFlatL2 / IndexIVFFlat)
-│       ├── train_model.py         - PyTorch mixed-precision generator fine-tuning loop
-│       ├── downloader.py          - Direct upload handler and yt-dlp audio downloader
-│       ├── separation.py          - Demucs htdemucs stem separation pipeline
-│       ├── conversion.py          - RVC v2 inference, pitch shifting & FAISS blending
-│       └── remix.py               - Latency drift alignment, HPF & master mixer
-├── frontend/
-│   ├── index.html                 - 4-tab glassmorphic web dashboard
-│   ├── css/
-│   │   └── style.css              - Custom responsive dark-theme stylesheet
-│   └── js/
-│       └── app.js                 - UI controllers, audio players, SSE log stream
-├── datasets/                      - Raw and preprocessed voice sample datasets
-├── models_trained/                - Custom trained weights (model.pth) & FAISS indices (model.index)
-├── pretrained/                    - Foundation model checkpoints (rmvpe.pt, f0G40k.pth, f0D40k.pth)
-├── scripts/
-│   ├── download_models.py         - Script to download foundation checkpoints
-│   └── test_pipeline_e2e.py       - End-to-end pipeline verification test
-├── storage/
-│   ├── uploads/                   - Ingested song audio files
-│   ├── stems/                     - Demucs separated vocal and instrumental stems
-│   ├── converted/                 - Solo converted vocal files
-│   └── remixed/                   - Final mastered WAV and MP3 mixes
-├── requirements.txt               - Pinned Python package dependencies
-├── run.py                         - Application launcher & environment validator
-└── README.md                      - Project documentation
-```
-
----
-
-## Automated Pipeline Verification
-
-To verify that your GPU, CUDA toolkit, PyTorch installation, and all pipeline stages are functioning properly:
-
-```bash
-python scripts/test_pipeline_e2e.py
-```
-
-This script automatically executes:
-1. Synthetic voice dataset synthesis
-2. Audio preprocessing, trimming, and quality audit
-3. ContentVec and RMVPE feature extraction
-4. FAISS index construction
-5. Multi-epoch PyTorch generator fine-tuning with mixed precision
-6. Voice conversion inference with pitch shift and index retrieval
-7. Latency alignment and master remix rendering
-
----
-
-## Troubleshooting & FAQ
-
-### CUDA Out of Memory (OOM) During Training
-If training fails with a PyTorch CUDA memory error:
-- Reduce the batch size in Tab 2 from `8` to `4` or `2`.
-- Ensure no other GPU-intensive applications (such as 3D games or video editors) are active.
-
-### FFmpeg Not Found Error
-If you encounter an error stating `ffmpeg is not recognized` or `FileNotFoundError: ffmpeg`:
-- Verify FFmpeg is installed and added to your system `PATH`.
-- Close and reopen your terminal after installing FFmpeg.
-- Test by running `ffmpeg -version` in a fresh terminal window.
-
-### Best Practices for Voice Recording
-- Record using a condenser microphone in a quiet room with minimal room reverb.
-- Keep a consistent distance (6–8 inches) from the microphone using a pop filter.
-- Sing vocal scales, melodic phrases, sustained notes, and dynamic variations across low, mid, and high registers.
-- Avoid recordings with background music or instrumental bleed.
-
-### Cross-Gender Vocal Conversion
-- When converting a female vocal track to a male voice, set **Pitch Shift** to `-12` semitones.
-- When converting a male vocal track to a female voice, set **Pitch Shift** to `+12` semitones.
-- For subtle timbre adjustment within the same vocal range, leave the slider at `0`.
-
----
-
-## License
-
-This project is intended for personal, creative, and educational use. Always ensure you have appropriate rights and permissions when using vocal recordings and song compositions.
+`cargo test --workspace` covers all 10 workspace crates (`13` unit & integration tests):
+- **`mc-core`**: Coordinate packing, `AABB` ray/swept collision, directional math, RNG determinism
+- **`mc-nbt`**: Binary NBT round-trip and Anvil `.mca` sector storage
+- **`mc-data`**: Verification of all embedded 26.1.2 registries, tags, recipes, and loot tables
+- **`mc-world`**: Voxel DDA raycasting, redstone circuits, and scheduled water flow
+- **`mc-gen`**: Deterministic Overworld, Nether, and End chunk generation
+- **`mc-entities`**: `CombatRules` absorption math, player physics, and `/command` execution
+- **`mc-proto`**: VarInt codec and Server List Ping round-trip
+- **`mc-audio`**: Audio engine initialization
+- **`mc-render`**: Texture atlas packing and multi-pass chunk geometry generation
+- **`mc-client`**: End-to-end integration test covering terrain generation, meshing, physics, 2x2 crafting, block loot, furnace smelting, Nether & End chunks, combat, commands, and Anvil `.mca` / `level.dat` save & reload

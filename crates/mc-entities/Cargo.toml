@@ -1,0 +1,12 @@
+[package]
+name = "mc-entities"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mc-core = { path = "../mc-core" }
+mc-data = { path = "../mc-data" }
+mc-world = { path = "../mc-world" }
+glam.workspace = true
+rand.workspace = true
+serde.workspace = true

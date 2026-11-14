@@ -1,0 +1,11 @@
+[package]
+name = "mc-proto"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mc-core = { path = "../mc-core" }
+mc-nbt = { path = "../mc-nbt" }
+flate2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
